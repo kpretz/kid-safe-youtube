@@ -54,8 +54,9 @@ def get_youtube_info(url):
         channel_id = url.split('channel/')[1].split('/')[0]
         return fetch_channel_info(channel_id)
     elif '@' in url:
-        # Handle @username format - would need additional API call
-        return None, f"Please use the full channel URL format for {url}"
+        # Handle @username format - convert to channel ID first
+        username = url.split('@')[1].split('/')[0]
+        return fetch_channel_info_by_username(username)
     return None, "Invalid YouTube URL"
 
 def fetch_playlist_info(playlist_id):
@@ -78,6 +79,48 @@ def fetch_playlist_info(playlist_id):
                 'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
             }, None
     return None, "Could not fetch playlist info"
+
+def fetch_channel_info_by_username(username):
+    """Fetch channel info from YouTube API using @username"""
+    # First, try to get channel info using the username/handle
+    url = f"{YOUTUBE_API_BASE}/search"
+    params = {
+        'part': 'snippet',
+        'q': username,
+        'type': 'channel',
+        'maxResults': 1,
+        'key': YOUTUBE_API_KEY
+    }
+    
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if data['items']:
+            # Get the channel ID from search results
+            channel_id = data['items'][0]['snippet']['channelId']
+            # Now get full channel info
+            return fetch_channel_info(channel_id)
+    
+    # If search doesn't work, try the channels endpoint with forUsername
+    url = f"{YOUTUBE_API_BASE}/channels"
+    params = {
+        'part': 'snippet',
+        'forUsername': username,
+        'key': YOUTUBE_API_KEY
+    }
+    
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if data['items']:
+            item = data['items'][0]
+            return {
+                'id': item['id'],
+                'title': item['snippet']['title'],
+                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+            }, None
+    
+    return None, f"Could not find channel for @{username}"
 
 def fetch_channel_info(channel_id):
     """Fetch channel info from YouTube API"""
