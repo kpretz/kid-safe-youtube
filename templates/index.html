@@ -118,6 +118,15 @@
             margin-bottom: 15px;
         }
 
+        .favorite-thumbnail {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 0 auto 15px auto;
+            display: block;
+            object-fit: cover;
+        }
+
         .favorite-title {
             font-weight: bold;
             font-size: 1.2em;
@@ -187,7 +196,11 @@
             <div class="favorites-grid">
                 {% for channel in channels %}
                 <a href="/channel/{{ channel.id }}" class="favorite-card">
-                    <div class="favorite-icon channel-icon">📺</div>
+                    {% if channel.thumbnail %}
+                        <img src="{{ channel.thumbnail }}" alt="{{ channel.title }}" class="favorite-thumbnail">
+                    {% else %}
+                        <div class="favorite-icon channel-icon">📺</div>
+                    {% endif %}
                     <div class="favorite-title">{{ channel.title }}</div>
                     <div class="favorite-description">{{ channel.description }}</div>
                 </a>

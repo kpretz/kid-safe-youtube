@@ -136,6 +136,23 @@
             padding: 20px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .content-thumbnail {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin-bottom: 15px;
+            object-fit: cover;
+        }
+
+        .content-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
         }
 
         .content-title {
@@ -184,6 +201,14 @@
 
         .channel-card {
             border-left: 4px solid #4ECDC4;
+        }
+
+        .playlist-icon {
+            color: #FF6B6B;
+        }
+
+        .channel-icon {
+            color: #4ECDC4;
         }
 
         .alert {
@@ -278,7 +303,8 @@
                     {% for playlist in playlists %}
                     <div class="content-card playlist-card">
                         <a href="/admin/remove/playlist/{{ playlist.id }}" class="remove-btn" onclick="return confirm('Remove this playlist?')">&times;</a>
-                        <div class="content-title">📋 {{ playlist.title }}</div>
+                        <div class="content-icon playlist-icon">📋</div>
+                        <div class="content-title">{{ playlist.title }}</div>
                         <div class="content-description">{{ playlist.description }}</div>
                         <div class="content-id">ID: {{ playlist.id }}</div>
                     </div>
@@ -298,7 +324,12 @@
                     {% for channel in channels %}
                     <div class="content-card channel-card">
                         <a href="/admin/remove/channel/{{ channel.id }}" class="remove-btn" onclick="return confirm('Remove this channel?')">&times;</a>
-                        <div class="content-title">📺 {{ channel.title }}</div>
+                        {% if channel.thumbnail %}
+                            <img src="{{ channel.thumbnail }}" alt="{{ channel.title }}" class="content-thumbnail">
+                        {% else %}
+                            <div class="content-icon channel-icon">📺</div>
+                        {% endif %}
+                        <div class="content-title">{{ channel.title }}</div>
                         <div class="content-description">{{ channel.description }}</div>
                         <div class="content-id">ID: {{ channel.id }}</div>
                     </div>
