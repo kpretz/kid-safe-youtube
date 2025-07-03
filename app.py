@@ -339,15 +339,23 @@ def playlist(playlist_id):
     
     if results and 'items' in results:
         for item in results['items']:
-            if 'resourceId' in item['snippet'] and 'videoId' in item['snippet']['resourceId']:
-                video = {
-                    'id': item['snippet']['resourceId']['videoId'],
-                    'title': item['snippet']['title'],
-                    'channel': item['snippet']['channelTitle'],
-                    'thumbnail': item['snippet']['thumbnails']['medium']['url'],
-                    'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
-                }
-                videos.append(video)
+            # Check if this is a valid video item
+            if ('snippet' in item and 
+                'resourceId' in item['snippet'] and 
+                'videoId' in item['snippet']['resourceId']):
+                
+                video_id = item['snippet']['resourceId']['videoId']
+                
+                # Skip deleted or private videos
+                if video_id and item['snippet']['title'] != 'Deleted video':
+                    video = {
+                        'id': video_id,
+                        'title': item['snippet']['title'],
+                        'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
+                        'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
+                        'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                    }
+                    videos.append(video)
     
     return render_template('playlist.html', videos=videos, playlist_title=playlist_title)
 
@@ -368,20 +376,34 @@ def channel(channel_id):
     
     if results and 'items' in results:
         for item in results['items']:
-            video = {
-                'id': item['id']['videoId'],
-                'title': item['snippet']['title'],
-                'channel': item['snippet']['channelTitle'],
-                'thumbnail': item['snippet']['thumbnails']['medium']['url'],
-                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
-            }
-            videos.append(video)
+            # Check if this is a valid video item from search results
+            if ('snippet' in item and 
+                'id' in item and 
+                'videoId' in item['id']):
+                
+                video_id = item['id']['videoId']
+                
+                # Skip deleted or private videos
+                if video_id and item['snippet']['title'] != 'Deleted video':
+                    video = {
+                        'id': video_id,
+                        'title': item['snippet']['title'],
+                        'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
+                        'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
+                        'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                    }
+                    videos.append(video)
     
     return render_template('channel.html', videos=videos, channel_title=channel_title)
 
 @app.route('/watch/<video_id>')
 def watch(video_id):
     """Watch a video"""
+    # Basic validation of video ID format
+    if not video_id or len(video_id) < 10:
+        flash('Invalid video ID', 'error')
+        return redirect(url_for('home'))
+    
     return render_template('watch.html', video_id=video_id)
 
 if __name__ == '__main__':
