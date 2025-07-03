@@ -117,7 +117,8 @@ def fetch_channel_info_by_username(username):
             return {
                 'id': item['id'],
                 'title': item['snippet']['title'],
-                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description'],
+                'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else None
             }, None
     
     return None, f"Could not find channel for @{username}"
@@ -139,7 +140,8 @@ def fetch_channel_info(channel_id):
             return {
                 'id': channel_id,
                 'title': item['snippet']['title'],
-                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description'],
+                'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else None
             }, None
     return None, "Could not fetch channel info"
 
