@@ -226,4 +226,86 @@
             }
 
             .add-form {
-                flex-direction: column
+                flex-direction: column;
+            }
+
+            .add-form input {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛠️ Admin Panel</h1>
+            <div class="header-actions">
+                <a href="/" class="home-btn">Home</a>
+                <a href="/admin/logout" class="logout-btn">Logout</a>
+            </div>
+        </div>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'error' if category == 'error' else 'success' }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="admin-section">
+            <h2 class="section-title">Add New Content</h2>
+            <div class="help-text">
+                Paste any YouTube playlist or channel URL below. The app will automatically fetch the title and description.
+            </div>
+            <form method="POST" action="/admin/add" class="add-form">
+                <input type="url" name="url" placeholder="https://www.youtube.com/playlist?list=... or https://www.youtube.com/channel/..." required>
+                <button type="submit" class="add-btn">Add Content</button>
+            </form>
+        </div>
+
+        <div class="admin-section">
+            <h2 class="section-title">Current Playlists ({{ playlists|length }})</h2>
+            {% if playlists %}
+                <div class="content-grid">
+                    {% for playlist in playlists %}
+                    <div class="content-card playlist-card">
+                        <a href="/admin/remove/playlist/{{ playlist.id }}" class="remove-btn" onclick="return confirm('Remove this playlist?')">&times;</a>
+                        <div class="content-title">📋 {{ playlist.title }}</div>
+                        <div class="content-description">{{ playlist.description }}</div>
+                        <div class="content-id">ID: {{ playlist.id }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    No playlists added yet. Add some above!
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="admin-section">
+            <h2 class="section-title">Current Channels ({{ channels|length }})</h2>
+            {% if channels %}
+                <div class="content-grid">
+                    {% for channel in channels %}
+                    <div class="content-card channel-card">
+                        <a href="/admin/remove/channel/{{ channel.id }}" class="remove-btn" onclick="return confirm('Remove this channel?')">&times;</a>
+                        <div class="content-title">📺 {{ channel.title }}</div>
+                        <div class="content-description">{{ channel.description }}</div>
+                        <div class="content-id">ID: {{ channel.id }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    No channels added yet. Add some above!
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
