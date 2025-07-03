@@ -1,14 +1,47 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask import Flask, render_template, request
 import requests
 import os
-from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
 
 # YouTube API configuration
 YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY', '')
 YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
+
+# YOUR FAMILY'S FAVORITE PLAYLISTS AND CHANNELS
+# Add your actual playlist IDs and channel IDs here
+FAMILY_PLAYLISTS = [
+    {
+        'id': 'PLrAXtmRdnEQy4VElvNpzeLVnOO8bWqTkP',
+        'title': 'Science for Kids',
+        'description': 'Educational science videos for children'
+    },
+    {
+        'id': 'PLQOGdSeUGEwt2_-9_lZP6_NvHO_jdAbQE',
+        'title': 'Fun Learning',
+        'description': 'Fun educational content'
+    },
+    # Add more playlists here - just copy the playlist ID from YouTube URLs
+]
+
+FAMILY_CHANNELS = [
+    {
+        'id': 'UCKlLH1lp7QEKIbLbXPjTU7A',
+        'title': 'SciShow Kids',
+        'description': 'Science education for kids'
+    },
+    {
+        'id': 'UCNVEsYbiZjH5QLmGeSgj9wA',
+        'title': 'National Geographic Kids',
+        'description': 'Nature and science content'
+    },
+    {
+        'id': 'UC4-a7R9g-yQhTGHrKKGYvMA',
+        'title': 'Crash Course Kids',
+        'description': 'Educational videos on science topics'
+    },
+    # Add more channels here - get channel IDs from YouTube URLs
+]
 
 class YouTubeAPI:
     def __init__(self, api_key):
@@ -68,8 +101,10 @@ youtube = YouTubeAPI(YOUTUBE_API_KEY)
 
 @app.route('/')
 def home():
-    """Main page"""
-    return render_template('index.html')
+    """Main page with family favorites"""
+    return render_template('index.html', 
+                         playlists=FAMILY_PLAYLISTS, 
+                         channels=FAMILY_CHANNELS)
 
 @app.route('/search')
 def search():
@@ -97,13 +132,19 @@ def search():
 @app.route('/playlist/<playlist_id>')
 def playlist(playlist_id):
     """View playlist videos"""
+    # Find playlist title from our hardcoded list
+    playlist_title = "Playlist"
+    for playlist in FAMILY_PLAYLISTS:
+        if playlist['id'] == playlist_id:
+            playlist_title = playlist['title']
+            break
+    
     results = youtube.get_playlist_videos(playlist_id)
     videos = []
-    playlist_title = "Playlist"
     
     if results and 'items' in results:
         for item in results['items']:
-            if 'videoId' in item['snippet']['resourceId']:
+            if 'resourceId' in item['snippet'] and 'videoId' in item['snippet']['resourceId']:
                 video = {
                     'id': item['snippet']['resourceId']['videoId'],
                     'title': item['snippet']['title'],
@@ -118,9 +159,15 @@ def playlist(playlist_id):
 @app.route('/channel/<channel_id>')
 def channel(channel_id):
     """View channel videos"""
+    # Find channel title from our hardcoded list
+    channel_title = "Channel"
+    for channel in FAMILY_CHANNELS:
+        if channel['id'] == channel_id:
+            channel_title = channel['title']
+            break
+    
     results = youtube.get_channel_videos(channel_id)
     videos = []
-    channel_title = "Channel"
     
     if results and 'items' in results:
         for item in results['items']:
@@ -132,9 +179,6 @@ def channel(channel_id):
                 'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
             }
             videos.append(video)
-        
-        if videos:
-            channel_title = videos[0]['channel']
     
     return render_template('channel.html', videos=videos, channel_title=channel_title)
 
@@ -143,27 +187,6 @@ def watch(video_id):
     """Watch a video"""
     return render_template('watch.html', video_id=video_id)
 
-@app.route('/favorites')
-def favorites():
-    """Your favorite playlists and channels"""
-    # Customize these with your actual playlist IDs and channel IDs
-    favorite_playlists = [
-        {'id': 'PLrAXtmRdnEQy4VElvNpzeLVnOO8bWqTkP', 'title': 'Kids Educational Videos'},
-        {'id': 'PLQOGdSeUGEwt2_-9_lZP6_NvHO_jdAbQE', 'title': 'Science for Kids'},
-        # Add your actual playlist IDs here
-    ]
-    
-    favorite_channels = [
-        {'id': 'UCKlLH1lp7QEKIbLbXPjTU7A', 'title': 'SciShow Kids'},
-        {'id': 'UCNVEsYbiZjH5QLmGeSgj9wA', 'title': 'National Geographic Kids'},
-        # Add your actual channel IDs here
-    ]
-    
-    return render_template('favorites.html', 
-                         playlists=favorite_playlists, 
-                         channels=favorite_channels)
-
 if __name__ == '__main__':
-    # For DigitalOcean deployment
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
