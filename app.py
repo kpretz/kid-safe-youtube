@@ -1,47 +1,104 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 import requests
 import os
+import json
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
 
 # YouTube API configuration
 YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY', '')
 YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
 
-# YOUR FAMILY'S FAVORITE PLAYLISTS AND CHANNELS
-# Add your actual playlist IDs and channel IDs here
-FAMILY_PLAYLISTS = [
-    {
-        'id': 'PLrAXtmRdnEQy4VElvNpzeLVnOO8bWqTkP',
-        'title': 'Science for Kids',
-        'description': 'Educational science videos for children'
-    },
-    {
-        'id': 'PLQOGdSeUGEwt2_-9_lZP6_NvHO_jdAbQE',
-        'title': 'Fun Learning',
-        'description': 'Fun educational content'
-    },
-    # Add more playlists here - just copy the playlist ID from YouTube URLs
-]
+# Admin password (set via environment variable)
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
-FAMILY_CHANNELS = [
-    {
-        'id': 'UCKlLH1lp7QEKIbLbXPjTU7A',
-        'title': 'SciShow Kids',
-        'description': 'Science education for kids'
-    },
-    {
-        'id': 'UCNVEsYbiZjH5QLmGeSgj9wA',
-        'title': 'National Geographic Kids',
-        'description': 'Nature and science content'
-    },
-    {
-        'id': 'UC4-a7R9g-yQhTGHrKKGYvMA',
-        'title': 'Crash Course Kids',
-        'description': 'Educational videos on science topics'
-    },
-    # Add more channels here - get channel IDs from YouTube URLs
-]
+# File to store favorites (persists across app restarts)
+FAVORITES_FILE = 'favorites.json'
+
+def load_favorites():
+    """Load favorites from file"""
+    try:
+        with open(FAVORITES_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        # Default favorites if file doesn't exist
+        return {
+            'playlists': [
+                {
+                    'id': 'PLrAXtmRdnEQy4VElvNpzeLVnOO8bWqTkP',
+                    'title': 'Science for Kids',
+                    'description': 'Educational science videos for children'
+                }
+            ],
+            'channels': [
+                {
+                    'id': 'UCKlLH1lp7QEKIbLbXPjTU7A',
+                    'title': 'SciShow Kids',
+                    'description': 'Science education for kids'
+                }
+            ]
+        }
+
+def save_favorites(favorites):
+    """Save favorites to file"""
+    with open(FAVORITES_FILE, 'w') as f:
+        json.dump(favorites, f, indent=2)
+
+def get_youtube_info(url):
+    """Extract channel or playlist info from YouTube URL"""
+    if 'playlist?list=' in url:
+        playlist_id = url.split('list=')[1].split('&')[0]
+        return fetch_playlist_info(playlist_id)
+    elif 'channel/' in url:
+        channel_id = url.split('channel/')[1].split('/')[0]
+        return fetch_channel_info(channel_id)
+    elif '@' in url:
+        # Handle @username format - would need additional API call
+        return None, f"Please use the full channel URL format for {url}"
+    return None, "Invalid YouTube URL"
+
+def fetch_playlist_info(playlist_id):
+    """Fetch playlist info from YouTube API"""
+    url = f"{YOUTUBE_API_BASE}/playlists"
+    params = {
+        'part': 'snippet',
+        'id': playlist_id,
+        'key': YOUTUBE_API_KEY
+    }
+    
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if data['items']:
+            item = data['items'][0]
+            return {
+                'id': playlist_id,
+                'title': item['snippet']['title'],
+                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+            }, None
+    return None, "Could not fetch playlist info"
+
+def fetch_channel_info(channel_id):
+    """Fetch channel info from YouTube API"""
+    url = f"{YOUTUBE_API_BASE}/channels"
+    params = {
+        'part': 'snippet',
+        'id': channel_id,
+        'key': YOUTUBE_API_KEY
+    }
+    
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if data['items']:
+            item = data['items'][0]
+            return {
+                'id': channel_id,
+                'title': item['snippet']['title'],
+                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+            }, None
+    return None, "Could not fetch channel info"
 
 class YouTubeAPI:
     def __init__(self, api_key):
@@ -102,9 +159,100 @@ youtube = YouTubeAPI(YOUTUBE_API_KEY)
 @app.route('/')
 def home():
     """Main page with family favorites"""
+    favorites = load_favorites()
     return render_template('index.html', 
-                         playlists=FAMILY_PLAYLISTS, 
-                         channels=FAMILY_CHANNELS)
+                         playlists=favorites['playlists'], 
+                         channels=favorites['channels'])
+
+@app.route('/admin')
+def admin():
+    """Admin panel to manage favorites"""
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+    
+    favorites = load_favorites()
+    return render_template('admin.html', 
+                         playlists=favorites['playlists'], 
+                         channels=favorites['channels'])
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Admin login"""
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == ADMIN_PASSWORD:
+            session['admin_logged_in'] = True
+            flash('Logged in successfully!', 'success')
+            return redirect(url_for('admin'))
+        else:
+            flash('Invalid password', 'error')
+    
+    return render_template('admin_login.html')
+
+@app.route('/admin/logout')
+def admin_logout():
+    """Admin logout"""
+    session.pop('admin_logged_in', None)
+    flash('Logged out successfully!', 'success')
+    return redirect(url_for('home'))
+
+@app.route('/admin/add', methods=['POST'])
+def admin_add():
+    """Add new playlist or channel"""
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+    
+    url = request.form.get('url', '').strip()
+    if not url:
+        flash('Please enter a YouTube URL', 'error')
+        return redirect(url_for('admin'))
+    
+    # Get info from YouTube
+    info, error = get_youtube_info(url)
+    if error:
+        flash(error, 'error')
+        return redirect(url_for('admin'))
+    
+    # Load current favorites
+    favorites = load_favorites()
+    
+    # Determine if it's a playlist or channel
+    if 'playlist?list=' in url:
+        # Check if already exists
+        if any(p['id'] == info['id'] for p in favorites['playlists']):
+            flash('Playlist already exists!', 'error')
+        else:
+            favorites['playlists'].append(info)
+            save_favorites(favorites)
+            flash(f'Added playlist: {info["title"]}', 'success')
+    else:
+        # Check if already exists
+        if any(c['id'] == info['id'] for c in favorites['channels']):
+            flash('Channel already exists!', 'error')
+        else:
+            favorites['channels'].append(info)
+            save_favorites(favorites)
+            flash(f'Added channel: {info["title"]}', 'success')
+    
+    return redirect(url_for('admin'))
+
+@app.route('/admin/remove/<item_type>/<item_id>')
+def admin_remove(item_type, item_id):
+    """Remove playlist or channel"""
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+    
+    favorites = load_favorites()
+    
+    if item_type == 'playlist':
+        favorites['playlists'] = [p for p in favorites['playlists'] if p['id'] != item_id]
+        flash('Playlist removed!', 'success')
+    elif item_type == 'channel':
+        favorites['channels'] = [c for c in favorites['channels'] if c['id'] != item_id]
+        flash('Channel removed!', 'success')
+    
+    save_favorites(favorites)
+    return redirect(url_for('admin'))
 
 @app.route('/search')
 def search():
@@ -132,9 +280,11 @@ def search():
 @app.route('/playlist/<playlist_id>')
 def playlist(playlist_id):
     """View playlist videos"""
-    # Find playlist title from our hardcoded list
+    favorites = load_favorites()
+    
+    # Find playlist title from our favorites
     playlist_title = "Playlist"
-    for playlist in FAMILY_PLAYLISTS:
+    for playlist in favorites['playlists']:
         if playlist['id'] == playlist_id:
             playlist_title = playlist['title']
             break
@@ -159,9 +309,11 @@ def playlist(playlist_id):
 @app.route('/channel/<channel_id>')
 def channel(channel_id):
     """View channel videos"""
-    # Find channel title from our hardcoded list
+    favorites = load_favorites()
+    
+    # Find channel title from our favorites
     channel_title = "Channel"
-    for channel in FAMILY_CHANNELS:
+    for channel in favorites['channels']:
         if channel['id'] == channel_id:
             channel_title = channel['title']
             break
