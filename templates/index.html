@@ -1,27 +1,199 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kid-Safe YouTube</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block content %}
-<h2>Welcome to Kid-Safe YouTube! 🎉</h2>
-<p style="font-size: 18px; margin-bottom: 30px;">
-    Watch your favorite videos without any distractions, ads, or suggested content!
-</p>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
 
-<div class="search-box">
-    <form action="/search" method="get">
-        <input type="text" name="q" placeholder="Search for videos..." required>
-        <button type="submit">Search</button>
-    </form>
-</div>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
 
-<div style="text-align: center; margin-top: 40px;">
-    <h3>Quick Links</h3>
-    <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
-        <a href="/favorites" style="padding: 15px 30px; background: #4A90E2; color: white; text-decoration: none; border-radius: 25px; font-size: 18px;">
-            View Favorites
-        </a>
-        <a href="/search" style="padding: 15px 30px; background: #764ba2; color: white; text-decoration: none; border-radius: 25px; font-size: 18px;">
-            Search Videos
-        </a>
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #4A90E2;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .search-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            font-size: 18px;
+        }
+
+        .search-box button {
+            padding: 15px 30px;
+            background: #4A90E2;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .search-box button:hover {
+            background: #357ABD;
+        }
+
+        .favorites-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-title {
+            color: #4A90E2;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .favorites-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .favorite-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .favorite-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .favorite-icon {
+            font-size: 3em;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .favorite-title {
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            color: #333;
+            text-align: center;
+        }
+
+        .favorite-description {
+            color: #666;
+            font-size: 0.9em;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .playlist-icon {
+            color: #FF6B6B;
+        }
+
+        .channel-icon {
+            color: #4ECDC4;
+        }
+
+        @media (max-width: 768px) {
+            .search-box {
+                flex-direction: column;
+            }
+            
+            .favorites-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 Kid-Safe YouTube</h1>
+            <p>Watch your favorite videos without any distractions!</p>
+        </div>
+
+        <div class="search-section">
+            <h2 class="section-title">Search for Videos</h2>
+            <div class="search-box">
+                <form action="/search" method="get" style="display: flex; gap: 10px; width: 100%;">
+                    <input type="text" name="q" placeholder="Search for educational videos..." required>
+                    <button type="submit">Search</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="favorites-section">
+            <h2 class="section-title">Your Favorite Playlists</h2>
+            <div class="favorites-grid">
+                {% for playlist in playlists %}
+                <a href="/playlist/{{ playlist.id }}" class="favorite-card">
+                    <div class="favorite-icon playlist-icon">📋</div>
+                    <div class="favorite-title">{{ playlist.title }}</div>
+                    <div class="favorite-description">{{ playlist.description }}</div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="favorites-section">
+            <h2 class="section-title">Your Favorite Channels</h2>
+            <div class="favorites-grid">
+                {% for channel in channels %}
+                <a href="/channel/{{ channel.id }}" class="favorite-card">
+                    <div class="favorite-icon channel-icon">📺</div>
+                    <div class="favorite-title">{{ channel.title }}</div>
+                    <div class="favorite-description">{{ channel.description }}</div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
     </div>
-</div>
-{% endblock %}
+</body>
+</html>
