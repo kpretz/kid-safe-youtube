@@ -259,10 +259,14 @@
         <div class="admin-section">
             <h2 class="section-title">Add New Content</h2>
             <div class="help-text">
-                Paste any YouTube playlist or channel URL below. The app will automatically fetch the title and description.
+                Paste any YouTube playlist or channel URL below. Works with @username format too!<br>
+                <strong>Examples:</strong><br>
+                • https://www.youtube.com/@LevicBricks<br>
+                • https://www.youtube.com/playlist?list=PLxxx<br>
+                • https://www.youtube.com/channel/UCxxx
             </div>
             <form method="POST" action="/admin/add" class="add-form">
-                <input type="url" name="url" placeholder="https://www.youtube.com/playlist?list=... or https://www.youtube.com/channel/..." required>
+                <input type="url" name="url" placeholder="https://www.youtube.com/@username or playlist URL..." required>
                 <button type="submit" class="add-btn">Add Content</button>
             </form>
         </div>
