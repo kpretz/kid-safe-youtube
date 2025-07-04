@@ -419,7 +419,7 @@ class YouTubeAPI:
             'part': 'snippet',
             'channelId': channel_id,
             'type': 'video',
-            'order': 'relevance',  # Changed from 'date' to 'relevance' to get better mix
+            'order': 'date',  # 
             'videoDuration': 'medium',  # Filters out shorts (which are usually 'short')
             'maxResults': max_results,
             'key': self.api_key
