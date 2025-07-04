@@ -164,9 +164,45 @@
             <div class="video-player">
                 <iframe src="https://www.youtube.com/embed/{{ video_id }}?rel=0&showinfo=0&modestbranding=1&autoplay=1" 
                         allowfullscreen
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        onerror="showEmbedError()">
                 </iframe>
             </div>
+
+            <!-- Fallback for embedding issues -->
+            <div id="embed-error" style="display: none; text-align: center; padding: 20px; background: #fff3cd; border-radius: 10px; margin: 20px 0;">
+                <h3>⚠️ Video Can't Be Embedded</h3>
+                <p>This video's owner has disabled playback on other websites.</p>
+                <a href="https://www.youtube.com/watch?v={{ video_id }}" target="_blank" class="back-btn" style="margin-top: 15px; display: inline-block;">
+                    🔗 Watch on YouTube
+                </a>
+            </div>
+
+            <script>
+                // Show error message if iframe fails to load
+                window.addEventListener('message', function(event) {
+                    if (event.data === 'embed-error') {
+                        document.getElementById('embed-error').style.display = 'block';
+                    }
+                });
+
+                function showEmbedError() {
+                    document.getElementById('embed-error').style.display = 'block';
+                }
+
+                // Check if iframe loaded successfully after 3 seconds
+                setTimeout(function() {
+                    const iframe = document.querySelector('iframe');
+                    try {
+                        if (!iframe.contentDocument && !iframe.contentWindow) {
+                            showEmbedError();
+                        }
+                    } catch (e) {
+                        // This might indicate embedding is blocked
+                        console.log('Possible embedding restriction detected');
+                    }
+                }, 3000);
+            </script>
 
             <div class="video-controls">
                 <button onclick="history.back()" class="back-btn">

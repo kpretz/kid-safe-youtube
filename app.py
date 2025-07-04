@@ -246,6 +246,22 @@ class YouTubeAPI:
             return response.json()
         return None
     
+    def check_video_embeddable(self, video_id):
+        """Check if a video can be embedded"""
+        url = f"{YOUTUBE_API_BASE}/videos"
+        params = {
+            'part': 'status',
+            'id': video_id,
+            'key': self.api_key
+        }
+        
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            if data['items']:
+                return data['items'][0]['status'].get('embeddable', False)
+        return False
+
     def get_playlist_videos(self, playlist_id, max_results=50):
         """Get videos from a playlist"""
         url = f"{YOUTUBE_API_BASE}/playlistItems"
@@ -417,14 +433,15 @@ def search():
     
     if results and 'items' in results:
         for item in results['items']:
-            video = {
-                'id': item['id']['videoId'],
-                'title': item['snippet']['title'],
-                'channel': item['snippet']['channelTitle'],
-                'thumbnail': item['snippet']['thumbnails']['medium']['url'],
-                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
-            }
-            videos.append(video)
+            if 'id' in item and 'videoId' in item['id']:
+                video = {
+                    'id': item['id']['videoId'],
+                    'title': item['snippet']['title'],
+                    'channel': item['snippet']['channelTitle'],
+                    'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
+                    'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                }
+                videos.append(video)
     
     return render_template('search.html', videos=videos, query=query)
 
@@ -454,15 +471,19 @@ def playlist(playlist_id):
                 
                 # Skip deleted or private videos
                 if video_id and item['snippet']['title'] != 'Deleted video':
-                    print(f"🎵 Found playlist video: {video_id} - {item['snippet']['title']}")
-                    video = {
-                        'id': video_id,
-                        'title': item['snippet']['title'],
-                        'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
-                        'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
-                        'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
-                    }
-                    videos.append(video)
+                    # Check if video is embeddable
+                    if youtube.check_video_embeddable(video_id):
+                        print(f"🎵 Found embeddable playlist video: {video_id} - {item['snippet']['title']}")
+                        video = {
+                            'id': video_id,
+                            'title': item['snippet']['title'],
+                            'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
+                            'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
+                            'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                        }
+                        videos.append(video)
+                    else:
+                        print(f"⚠️ Skipping non-embeddable video: {video_id} - {item['snippet']['title']}")
     
     return render_template('playlist.html', videos=videos, playlist_title=playlist_title)
 
@@ -492,15 +513,19 @@ def channel(channel_id):
                 
                 # Skip deleted or private videos
                 if video_id and item['snippet']['title'] != 'Deleted video':
-                    print(f"📺 Found channel video: {video_id} - {item['snippet']['title']}")
-                    video = {
-                        'id': video_id,
-                        'title': item['snippet']['title'],
-                        'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
-                        'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
-                        'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
-                    }
-                    videos.append(video)
+                    # Check if video is embeddable
+                    if youtube.check_video_embeddable(video_id):
+                        print(f"📺 Found embeddable channel video: {video_id} - {item['snippet']['title']}")
+                        video = {
+                            'id': video_id,
+                            'title': item['snippet']['title'],
+                            'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
+                            'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
+                            'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                        }
+                        videos.append(video)
+                    else:
+                        print(f"⚠️ Skipping non-embeddable video: {video_id} - {item['snippet']['title']}")
     
     return render_template('channel.html', videos=videos, channel_title=channel_title)
 
