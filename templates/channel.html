@@ -68,6 +68,37 @@
             min-height: 400px;
         }
 
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 5px;
+            gap: 5px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px 20px;
+            text-align: center;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #666;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: #4A90E2;
+            background: rgba(74, 144, 226, 0.1);
+        }
+
+        .tab.active {
+            background: #4A90E2;
+            color: white;
+            box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+        }
+
         .channel-header {
             text-align: center;
             margin-bottom: 30px;
@@ -187,33 +218,84 @@
         </div>
 
         <div class="content">
-            <div class="channel-header">
-                <div class="video-count">
-                    {% if videos %}
-                        {{ videos|length }} videos from this channel (shorts filtered out)
-                    {% else %}
-                        No videos found from this channel
-                    {% endif %}
-                </div>
+            <!-- Channel Tabs -->
+            <div class="tabs">
+                <a href="/channel/{{ channel_id }}/videos" class="tab {% if current_tab == 'videos' %}active{% endif %}">
+                    📹 Recent Videos
+                </a>
+                <a href="/channel/{{ channel_id }}/playlists" class="tab {% if current_tab == 'playlists' %}active{% endif %}">
+                    📋 Playlists
+                </a>
             </div>
 
-            {% if videos %}
-                <div class="video-grid">
-                    {% for video in videos %}
-                    <a href="/watch/{{ video.id }}" class="video-card">
-                        <img src="{{ video.thumbnail }}" alt="{{ video.title }}">
-                        <div class="video-info">
-                            <div class="video-title">{{ video.title }}</div>
-                            <div class="video-channel">{{ video.channel }}</div>
-                            <div class="video-description">{{ video.description }}</div>
-                        </div>
-                    </a>
-                    {% endfor %}
+            {% if current_tab == 'videos' %}
+                <!-- Videos Tab Content -->
+                <div class="channel-header">
+                    <div class="video-count">
+                        {% if videos %}
+                            {{ videos|length }} recent videos (shorts filtered out)
+                        {% else %}
+                            No videos found from this channel
+                        {% endif %}
+                    </div>
                 </div>
+
+                {% if videos %}
+                    <div class="video-grid">
+                        {% for video in videos %}
+                        <a href="/watch/{{ video.id }}" class="video-card">
+                            <img src="{{ video.thumbnail }}" alt="{{ video.title }}">
+                            <div class="video-info">
+                                <div class="video-title">{{ video.title }}</div>
+                                <div class="video-channel">{{ video.channel }}</div>
+                                <div class="video-description">{{ video.description }}</div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        No recent videos found from this channel.
+                    </div>
+                {% endif %}
+
             {% else %}
-                <div class="empty-state">
-                    No recent videos found from this channel.
+                <!-- Playlists Tab Content -->
+                <div class="channel-header">
+                    <div class="video-count">
+                        {% if playlists %}
+                            {{ playlists|length }} playlists from this channel
+                        {% else %}
+                            No playlists found from this channel
+                        {% endif %}
+                    </div>
                 </div>
+
+                {% if playlists %}
+                    <div class="video-grid">
+                        {% for playlist in playlists %}
+                        <a href="/playlist/{{ playlist.id }}" class="video-card">
+                            {% if playlist.thumbnail %}
+                                <img src="{{ playlist.thumbnail }}" alt="{{ playlist.title }}">
+                            {% else %}
+                                <div style="height: 200px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #999;">
+                                    📋 Playlist
+                                </div>
+                            {% endif %}
+                            <div class="video-info">
+                                <div class="video-title">{{ playlist.title }}</div>
+                                <div class="video-channel">{{ channel_title }}</div>
+                                <div class="video-description">{{ playlist.description }}</div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        No playlists found from this channel.
+                    </div>
+                {% endif %}
+
             {% endif %}
 
             <div class="back-controls">

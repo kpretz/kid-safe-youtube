@@ -277,7 +277,67 @@ class YouTubeAPI:
             return response.json()
         return None
     
-    def get_channel_videos_comprehensive(self, channel_id):
+    def get_channel_playlists(self, channel_id, max_results=50):
+        """Get playlists from a channel"""
+        url = f"{YOUTUBE_API_BASE}/playlists"
+        params = {
+            'part': 'snippet',
+            'channelId': channel_id,
+            'maxResults': max_results,
+            'key': self.api_key
+        }
+        
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            return response.json()
+        return None
+
+    def get_channel_videos_recent(self, channel_id, max_results=50):
+        """Get recent videos from a channel (most recent first, no shorts)"""
+        all_videos = []
+        next_page_token = None
+        
+        while len(all_videos) < max_results:
+            url = f"{YOUTUBE_API_BASE}/search"
+            params = {
+                'part': 'snippet',
+                'channelId': channel_id,
+                'type': 'video',
+                'order': 'date',  # Most recent first
+                'maxResults': 50,
+                'key': self.api_key
+            }
+            
+            if next_page_token:
+                params['pageToken'] = next_page_token
+            
+            response = requests.get(url, params=params)
+            if response.status_code != 200:
+                break
+                
+            data = response.json()
+            if not data.get('items'):
+                break
+            
+            # Filter out shorts by checking video duration
+            for item in data['items']:
+                if len(all_videos) >= max_results:
+                    break
+                    
+                video_id = item['id']['videoId']
+                
+                # Get video details to check duration
+                video_details = self.get_video_details(video_id)
+                if video_details and self.is_regular_video(video_details):
+                    all_videos.append(item)
+            
+            next_page_token = data.get('nextPageToken')
+            if not next_page_token:
+                break
+        
+        return {'items': all_videos[:max_results]}
+
+    def get_channel_videos_comprehensive(self, channel_id)::
         """Get comprehensive list of channel videos, filtering out shorts"""
         all_videos = []
         next_page_token = None
@@ -572,8 +632,9 @@ def playlist(playlist_id):
     return render_template('playlist.html', videos=videos, playlist_title=playlist_title)
 
 @app.route('/channel/<channel_id>')
-def channel(channel_id):
-    """View channel videos (comprehensive list, no shorts)"""
+@app.route('/channel/<channel_id>/<tab>')
+def channel(channel_id, tab='videos'):
+    """View channel videos or playlists with tabs"""
     favorites = load_favorites()
     
     # Find channel title from our favorites
@@ -583,31 +644,48 @@ def channel(channel_id):
             channel_title = channel['title']
             break
     
-    # Use comprehensive method to get more videos and filter shorts
-    results = youtube.get_channel_videos_comprehensive(channel_id)
     videos = []
+    playlists = []
     
-    if results and 'items' in results:
-        for item in results['items']:
-            # Check if this is a valid video item from search results
-            if ('snippet' in item and 
-                'id' in item and 
-                'videoId' in item['id']):
-                
-                video_id = item['id']['videoId']
-                
-                # Skip deleted or private videos
-                if video_id and item['snippet']['title'] != 'Deleted video':
-                    video = {
-                        'id': video_id,
-                        'title': item['snippet']['title'],
-                        'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
-                        'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
-                        'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
-                    }
-                    videos.append(video)
+    if tab == 'playlists':
+        # Get channel playlists
+        results = youtube.get_channel_playlists(channel_id)
+        if results and 'items' in results:
+            for item in results['items']:
+                playlist = {
+                    'id': item['id'],
+                    'title': item['snippet']['title'],
+                    'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description'],
+                    'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else ''
+                }
+                playlists.append(playlist)
+    else:
+        # Get recent videos (default tab)
+        results = youtube.get_channel_videos_recent(channel_id)
+        if results and 'items' in results:
+            for item in results['items']:
+                if ('snippet' in item and 
+                    'id' in item and 
+                    'videoId' in item['id']):
+                    
+                    video_id = item['id']['videoId']
+                    
+                    if video_id and item['snippet']['title'] != 'Deleted video':
+                        video = {
+                            'id': video_id,
+                            'title': item['snippet']['title'],
+                            'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
+                            'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
+                            'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                        }
+                        videos.append(video)
     
-    return render_template('channel.html', videos=videos, channel_title=channel_title)
+    return render_template('channel.html', 
+                         videos=videos, 
+                         playlists=playlists,
+                         channel_title=channel_title,
+                         channel_id=channel_id,
+                         current_tab=tab)
 
 @app.route('/watch/<video_id>')
 def watch(video_id):
