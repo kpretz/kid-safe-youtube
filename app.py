@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 import requests
 import os
 import json
+import base64
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
@@ -13,37 +14,116 @@ YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
 # Admin password (set via environment variable)
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
-# File to store favorites (persists across app restarts)
+# DigitalOcean API configuration (optional - for automatic updates)
+DO_API_TOKEN = os.environ.get('DO_API_TOKEN', '')
+DO_APP_ID = os.environ.get('DO_APP_ID', '')
+
+import json
+import base64
+
+# File to store favorites (for local development)
 FAVORITES_FILE = 'favorites.json'
 
 def load_favorites():
-    """Load favorites from file"""
+    """Load favorites from environment variable or file"""
+    # Try to load from environment variable first (for production)
+    favorites_env = os.environ.get('FAVORITES_DATA')
+    if favorites_env:
+        try:
+            # Decode base64 and parse JSON
+            favorites_json = base64.b64decode(favorites_env).decode('utf-8')
+            return json.loads(favorites_json)
+        except:
+            pass
+    
+    # Fallback to file (for local development)
     try:
         with open(FAVORITES_FILE, 'r') as f:
             return json.load(f)
     except:
-        # Default favorites if file doesn't exist
+        # Default favorites if nothing exists
         return {
-            'playlists': [
-                {
-                    'id': 'PLrAXtmRdnEQy4VElvNpzeLVnOO8bWqTkP',
-                    'title': 'Science for Kids',
-                    'description': 'Educational science videos for children'
-                }
-            ],
-            'channels': [
-                {
-                    'id': 'UCKlLH1lp7QEKIbLbXPjTU7A',
-                    'title': 'SciShow Kids',
-                    'description': 'Science education for kids'
-                }
-            ]
+            'playlists': [],
+            'channels': []
         }
 
+def update_digitalocean_env_var(favorites):
+    """Update FAVORITES_DATA environment variable in DigitalOcean"""
+    if not DO_API_TOKEN or not DO_APP_ID:
+        # If no API token/app ID, just print the value for manual update
+        favorites_json = json.dumps(favorites)
+        favorites_b64 = base64.b64encode(favorites_json.encode('utf-8')).decode('utf-8')
+        print(f"\n🔄 FAVORITES_DATA environment variable value:")
+        print(f"FAVORITES_DATA={favorites_b64}")
+        print("💡 Add this to your DigitalOcean app environment variables")
+        return False
+    
+    try:
+        # Encode favorites for environment variable
+        favorites_json = json.dumps(favorites)
+        favorites_b64 = base64.b64encode(favorites_json.encode('utf-8')).decode('utf-8')
+        
+        # Get current app spec
+        headers = {
+            'Authorization': f'Bearer {DO_API_TOKEN}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Get app spec
+        response = requests.get(f'https://api.digitalocean.com/v2/apps/{DO_APP_ID}', headers=headers)
+        if response.status_code != 200:
+            print(f"❌ Failed to get app spec: {response.status_code}")
+            return False
+        
+        app_spec = response.json()['app']
+        
+        # Update environment variables
+        if 'services' in app_spec['spec']:
+            for service in app_spec['spec']['services']:
+                if 'envs' not in service:
+                    service['envs'] = []
+                
+                # Remove existing FAVORITES_DATA if it exists
+                service['envs'] = [env for env in service['envs'] if env.get('key') != 'FAVORITES_DATA']
+                
+                # Add updated FAVORITES_DATA
+                service['envs'].append({
+                    'key': 'FAVORITES_DATA',
+                    'value': favorites_b64,
+                    'scope': 'RUN_TIME'
+                })
+        
+        # Update the app
+        update_response = requests.put(
+            f'https://api.digitalocean.com/v2/apps/{DO_APP_ID}',
+            headers=headers,
+            json={'spec': app_spec['spec']}
+        )
+        
+        if update_response.status_code == 200:
+            print("✅ Successfully updated DigitalOcean environment variable")
+            return True
+        else:
+            print(f"❌ Failed to update app: {update_response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error updating DigitalOcean env var: {e}")
+        return False
+
 def save_favorites(favorites):
-    """Save favorites to file"""
-    with open(FAVORITES_FILE, 'w') as f:
-        json.dump(favorites, f, indent=2)
+    """Save favorites to environment variable and file"""
+    # Save to file (for local development)
+    try:
+        with open(FAVORITES_FILE, 'w') as f:
+            json.dump(favorites, f, indent=2)
+    except Exception as e:
+        print(f"Warning: Could not save to file: {e}")
+    
+    # Try to update DigitalOcean environment variable automatically
+    update_digitalocean_env_var(favorites)
+    
+    return favorites
 
 def get_youtube_info(url):
     """Extract channel or playlist info from YouTube URL"""
@@ -234,6 +314,18 @@ def admin_login():
     
     return render_template('admin_login.html')
 
+@app.route('/admin/export')
+def admin_export():
+    """Export current favorites as environment variable"""
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+    
+    favorites = load_favorites()
+    favorites_json = json.dumps(favorites)
+    favorites_b64 = base64.b64encode(favorites_json.encode('utf-8')).decode('utf-8')
+    
+    return render_template('admin_export.html', favorites_data=favorites_b64)
+
 @app.route('/admin/logout')
 def admin_logout():
     """Admin logout"""
@@ -269,7 +361,11 @@ def admin_add():
         else:
             favorites['playlists'].append(info)
             save_favorites(favorites)
-            flash(f'Added playlist: {info["title"]}', 'success')
+            flash(f'✅ Added playlist: {info["title"]}', 'success')
+            if DO_API_TOKEN and DO_APP_ID:
+                flash('🔄 Automatically updating environment variables...', 'info')
+            else:
+                flash('💡 Remember to update your FAVORITES_DATA environment variable to make this permanent!', 'warning')
     else:
         # Check if already exists
         if any(c['id'] == info['id'] for c in favorites['channels']):
@@ -277,7 +373,11 @@ def admin_add():
         else:
             favorites['channels'].append(info)
             save_favorites(favorites)
-            flash(f'Added channel: {info["title"]}', 'success')
+            flash(f'✅ Added channel: {info["title"]}', 'success')
+            if DO_API_TOKEN and DO_APP_ID:
+                flash('🔄 Automatically updating environment variables...', 'info')
+            else:
+                flash('💡 Remember to update your FAVORITES_DATA environment variable to make this permanent!', 'warning')
     
     return redirect(url_for('admin'))
 
@@ -291,12 +391,18 @@ def admin_remove(item_type, item_id):
     
     if item_type == 'playlist':
         favorites['playlists'] = [p for p in favorites['playlists'] if p['id'] != item_id]
-        flash('Playlist removed!', 'success')
+        flash('✅ Playlist removed!', 'success')
     elif item_type == 'channel':
         favorites['channels'] = [c for c in favorites['channels'] if c['id'] != item_id]
-        flash('Channel removed!', 'success')
+        flash('✅ Channel removed!', 'success')
     
     save_favorites(favorites)
+    
+    if DO_API_TOKEN and DO_APP_ID:
+        flash('🔄 Automatically updating environment variables...', 'info')
+    else:
+        flash('💡 Remember to update your FAVORITES_DATA environment variable!', 'warning')
+    
     return redirect(url_for('admin'))
 
 @app.route('/search')
@@ -348,6 +454,7 @@ def playlist(playlist_id):
                 
                 # Skip deleted or private videos
                 if video_id and item['snippet']['title'] != 'Deleted video':
+                    print(f"🎵 Found playlist video: {video_id} - {item['snippet']['title']}")
                     video = {
                         'id': video_id,
                         'title': item['snippet']['title'],
@@ -385,6 +492,7 @@ def channel(channel_id):
                 
                 # Skip deleted or private videos
                 if video_id and item['snippet']['title'] != 'Deleted video':
+                    print(f"📺 Found channel video: {video_id} - {item['snippet']['title']}")
                     video = {
                         'id': video_id,
                         'title': item['snippet']['title'],
@@ -399,10 +507,16 @@ def channel(channel_id):
 @app.route('/watch/<video_id>')
 def watch(video_id):
     """Watch a video"""
-    # Basic validation of video ID format
-    if not video_id or len(video_id) < 10:
-        flash('Invalid video ID', 'error')
+    # Clean the video ID - remove any extra characters
+    video_id = video_id.strip()
+    
+    # Basic validation of video ID format (YouTube video IDs are 11 characters)
+    if not video_id or len(video_id) != 11:
+        flash(f'Invalid video ID: {video_id}', 'error')
         return redirect(url_for('home'))
+    
+    # Log for debugging
+    print(f"🎬 Playing video ID: {video_id}")
     
     return render_template('watch.html', video_id=video_id)
 
