@@ -423,79 +423,33 @@ def admin_remove(item_type, item_id):
 
 @app.route('/search')
 def search():
-    """Search for videos with debugging"""
+    """Search for videos"""
     query = request.args.get('q', '')
-    print(f"🔍 Search request received - Query: '{query}'")
-    
     if not query:
-        print("❌ No query provided, showing empty search page")
         return render_template('search.html', videos=[], query='')
     
     try:
-        print(f"🔑 Using API key: {YOUTUBE_API_KEY[:10]}..." if YOUTUBE_API_KEY else "❌ No API key found!")
-        
-        # Call YouTube API
-        print("📡 Calling YouTube API...")
         results = youtube.search_videos(query)
-        
-        print(f"📊 API Response type: {type(results)}")
-        if results:
-            print(f"📊 API Response keys: {list(results.keys()) if isinstance(results, dict) else 'Not a dict'}")
-            if 'items' in results:
-                print(f"📊 Number of items returned: {len(results['items'])}")
-            else:
-                print("⚠️ No 'items' key in response")
-        else:
-            print("❌ API returned None/empty response")
-        
         videos = []
         
         if results and 'items' in results:
-            print("🎬 Processing video items...")
-            for i, item in enumerate(results['items']):
-                try:
-                    print(f"  📹 Item {i}: {list(item.keys()) if isinstance(item, dict) else 'Not a dict'}")
+            for item in results['items']:
+                if 'id' in item and isinstance(item['id'], dict) and 'videoId' in item['id']:
+                    video_id = item['id']['videoId']
+                    snippet = item.get('snippet', {})
                     
-                    if 'id' in item:
-                        print(f"    🆔 ID structure: {item['id']}")
-                        if isinstance(item['id'], dict) and 'videoId' in item['id']:
-                            video_id = item['id']['videoId']
-                            print(f"    ✅ Video ID: {video_id}")
-                            
-                            # Check snippet
-                            if 'snippet' in item:
-                                snippet = item['snippet']
-                                print(f"    📝 Snippet keys: {list(snippet.keys())}")
-                                
-                                video = {
-                                    'id': video_id,
-                                    'title': snippet.get('title', 'No title'),
-                                    'channel': snippet.get('channelTitle', 'Unknown Channel'),
-                                    'thumbnail': snippet.get('thumbnails', {}).get('medium', {}).get('url', ''),
-                                    'description': snippet.get('description', '')[:100] + '...' if snippet.get('description', '') else 'No description'
-                                }
-                                videos.append(video)
-                                print(f"    ✅ Added video: {video['title']}")
-                            else:
-                                print(f"    ❌ No snippet in item {i}")
-                        else:
-                            print(f"    ❌ No videoId in item {i} ID structure")
-                    else:
-                        print(f"    ❌ No 'id' key in item {i}")
-                        
-                except Exception as e:
-                    print(f"    ❌ Error processing item {i}: {e}")
-                    
-        print(f"🎯 Final result: {len(videos)} videos processed")
+                    video = {
+                        'id': video_id,
+                        'title': snippet.get('title', 'No title'),
+                        'channel': snippet.get('channelTitle', 'Unknown Channel'),
+                        'thumbnail': snippet.get('thumbnails', {}).get('medium', {}).get('url', ''),
+                        'description': snippet.get('description', '')[:100] + '...' if snippet.get('description', '') else 'No description'
+                    }
+                    videos.append(video)
+        
         return render_template('search.html', videos=videos, query=query)
         
     except Exception as e:
-        print(f"💥 Search function error: {e}")
-        print(f"💥 Error type: {type(e)}")
-        import traceback
-        print(f"💥 Full traceback: {traceback.format_exc()}")
-        
-        # Return error page instead of crashing
         error_message = f"Search error: {str(e)}"
         return render_template('search.html', videos=[], query=query, error=error_message)
 

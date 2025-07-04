@@ -63,6 +63,15 @@
             background: #357ABD;
         }
 
+        .export-btn {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .export-btn:hover {
+            background: #138496;
+        }
+
         .logout-btn {
             background: #f44336;
             color: white;
@@ -230,6 +239,18 @@
             border: 1px solid #f5c6cb;
         }
 
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
         .help-text {
             color: #666;
             font-size: 0.9em;
@@ -265,7 +286,8 @@
         <div class="header">
             <h1>🛠️ Admin Panel</h1>
             <div class="header-actions">
-                <a href="/" class="home-btn">Home</a>
+                <a href="/" class="home-btn">🏠 Home</a>
+                <a href="/admin/export" class="export-btn">💾 Export Favorites</a>
                 <a href="/admin/logout" class="logout-btn">Logout</a>
             </div>
         </div>
