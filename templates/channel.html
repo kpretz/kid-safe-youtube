@@ -190,7 +190,7 @@
             <div class="channel-header">
                 <div class="video-count">
                     {% if videos %}
-                        Recent videos from this channel
+                        {{ videos|length }} videos from this channel (shorts filtered out)
                     {% else %}
                         No videos found from this channel
                     {% endif %}

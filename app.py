@@ -277,14 +277,90 @@ class YouTubeAPI:
             return response.json()
         return None
     
-    def get_channel_videos(self, channel_id, max_results=20):
-        """Get recent videos from a channel"""
+    def get_channel_videos_comprehensive(self, channel_id):
+        """Get comprehensive list of channel videos, filtering out shorts"""
+        all_videos = []
+        next_page_token = None
+        
+        while len(all_videos) < 100:  # Limit to prevent too many API calls
+            url = f"{YOUTUBE_API_BASE}/search"
+            params = {
+                'part': 'snippet',
+                'channelId': channel_id,
+                'type': 'video',
+                'order': 'relevance',
+                'maxResults': 50,
+                'key': self.api_key
+            }
+            
+            if next_page_token:
+                params['pageToken'] = next_page_token
+            
+            response = requests.get(url, params=params)
+            if response.status_code != 200:
+                break
+                
+            data = response.json()
+            if not data.get('items'):
+                break
+            
+            # Filter out shorts by checking video duration
+            for item in data['items']:
+                video_id = item['id']['videoId']
+                
+                # Get video details to check duration
+                video_details = self.get_video_details(video_id)
+                if video_details and self.is_regular_video(video_details):
+                    all_videos.append(item)
+            
+            next_page_token = data.get('nextPageToken')
+            if not next_page_token:
+                break
+        
+        return {'items': all_videos}
+    
+    def get_video_details(self, video_id):
+        """Get detailed video info including duration"""
+        url = f"{YOUTUBE_API_BASE}/videos"
+        params = {
+            'part': 'contentDetails',
+            'id': video_id,
+            'key': self.api_key
+        }
+        
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get('items', [{}])[0] if data.get('items') else None
+        return None
+    
+    def is_regular_video(self, video_details):
+        """Check if video is a regular video (not a short)"""
+        duration = video_details.get('contentDetails', {}).get('duration', '')
+        
+        # Parse ISO 8601 duration (PT1M30S = 1 minute 30 seconds)
+        import re
+        duration_match = re.search(r'PT(?:(\d+)M)?(?:(\d+)S)?', duration)
+        
+        if duration_match:
+            minutes = int(duration_match.group(1) or 0)
+            seconds = int(duration_match.group(2) or 0)
+            total_seconds = minutes * 60 + seconds
+            
+            # Consider videos over 60 seconds as regular videos (not shorts)
+            return total_seconds > 60
+        
+        return True  # Default to including if duration can't be parsed
+
+    def get_channel_videos(self, channel_id, max_results=50):
+        """Get all videos from a channel (excluding shorts)"""
         url = f"{YOUTUBE_API_BASE}/search"
         params = {
             'part': 'snippet',
             'channelId': channel_id,
             'type': 'video',
-            'order': 'date',
+            'order': 'relevance',  # Changed from 'date' to 'relevance' to get better mix
+            'videoDuration': 'medium',  # Filters out shorts (which are usually 'short')
             'maxResults': max_results,
             'key': self.api_key
         }
@@ -497,7 +573,7 @@ def playlist(playlist_id):
 
 @app.route('/channel/<channel_id>')
 def channel(channel_id):
-    """View channel videos"""
+    """View channel videos (comprehensive list, no shorts)"""
     favorites = load_favorites()
     
     # Find channel title from our favorites
@@ -507,7 +583,8 @@ def channel(channel_id):
             channel_title = channel['title']
             break
     
-    results = youtube.get_channel_videos(channel_id)
+    # Use comprehensive method to get more videos and filter shorts
+    results = youtube.get_channel_videos_comprehensive(channel_id)
     videos = []
     
     if results and 'items' in results:
@@ -521,19 +598,14 @@ def channel(channel_id):
                 
                 # Skip deleted or private videos
                 if video_id and item['snippet']['title'] != 'Deleted video':
-                    # Check if video is embeddable
-                    if youtube.check_video_embeddable(video_id):
-                        print(f"📺 Found embeddable channel video: {video_id} - {item['snippet']['title']}")
-                        video = {
-                            'id': video_id,
-                            'title': item['snippet']['title'],
-                            'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
-                            'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
-                            'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
-                        }
-                        videos.append(video)
-                    else:
-                        print(f"⚠️ Skipping non-embeddable video: {video_id} - {item['snippet']['title']}")
+                    video = {
+                        'id': video_id,
+                        'title': item['snippet']['title'],
+                        'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
+                        'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
+                        'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                    }
+                    videos.append(video)
     
     return render_template('channel.html', videos=videos, channel_title=channel_title)
 
