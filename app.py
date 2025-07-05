@@ -357,7 +357,7 @@ class YouTubeAPI:
         
         return {'items': all_videos[:max_results]}
 
-    def get_channel_videos_comprehensive(self, channel_id)::
+    def get_channel_videos_comprehensive(self, channel_id):
         """Get comprehensive list of channel videos, filtering out shorts"""
         all_videos = []
         next_page_token = None
