@@ -267,10 +267,10 @@
                 </a>
                 {% endfor %}
             </div>
-            {% if total_recent_videos > 3 %}
+            {% if total_recent_videos|default(0) > 3 %}
             <div style="text-align: center; margin-top: 20px;">
                 <a href="/recent" class="load-more-btn">
-                    Show More Recent Videos ({{ total_recent_videos - 3 }} more)
+                    Show More Recent Videos ({{ (total_recent_videos|default(0)) - 3 }} more)
                 </a>
             </div>
             {% endif %}

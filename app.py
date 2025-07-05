@@ -639,13 +639,17 @@ def home():
             channel['video_thumbnail'] = thumbnail_url
     
     # Get recently watched videos
-    recent_videos = get_recent_videos()
-    print(f"📺 Found {len(recent_videos)} recently watched videos")
+    watch_history = favorites.get('watch_history', [])
+    recent_videos = watch_history[:3]
+    total_recent_videos = len(watch_history)
+    
+    print(f"📺 Found {len(recent_videos)} recent videos for home page")
     
     return render_template('index.html', 
                          playlists=favorites['playlists'], 
                          channels=favorites['channels'],
-                         recent_videos=recent_videos)
+                         recent_videos=recent_videos,
+                         total_recent_videos=total_recent_videos)
 
 @app.route('/admin')
 def admin():
