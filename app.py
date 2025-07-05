@@ -262,6 +262,25 @@ class YouTubeAPI:
                 return data['items'][0]['status'].get('embeddable', False)
         return False
 
+    def get_playlist_thumbnail(self, playlist_id):
+        """Get thumbnail from first video in playlist"""
+        url = f"{YOUTUBE_API_BASE}/playlistItems"
+        params = {
+            'part': 'snippet',
+            'playlistId': playlist_id,
+            'maxResults': 1,
+            'key': self.api_key
+        }
+        
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('items'):
+                item = data['items'][0]
+                if 'thumbnails' in item['snippet']:
+                    return item['snippet']['thumbnails']['medium']['url']
+        return None
+
     def get_playlist_videos(self, playlist_id, max_results=50):
         """Get videos from a playlist"""
         url = f"{YOUTUBE_API_BASE}/playlistItems"
@@ -357,7 +376,7 @@ class YouTubeAPI:
         
         return {'items': all_videos[:max_results]}
 
-    def get_channel_videos_comprehensive(self, channel_id):
+    def get_channel_videos_comprehensive(self, channel_id)::
         """Get comprehensive list of channel videos, filtering out shorts"""
         all_videos = []
         next_page_token = None
@@ -457,6 +476,12 @@ youtube = YouTubeAPI(YOUTUBE_API_KEY)
 def home():
     """Main page with family favorites"""
     favorites = load_favorites()
+    
+    # Add thumbnails to playlists
+    for playlist in favorites['playlists']:
+        if 'thumbnail' not in playlist or not playlist['thumbnail']:
+            playlist['thumbnail'] = youtube.get_playlist_thumbnail(playlist['id'])
+    
     return render_template('index.html', 
                          playlists=favorites['playlists'], 
                          channels=favorites['channels'])
@@ -656,7 +681,14 @@ def playlist(playlist_id):
 def channel(channel_id, tab='videos'):
     """View channel videos or playlists with tabs"""
     favorites = load_favorites()
-    page_token = request.args.get('page_token')
+    page = int(request.args.get('page', 1))
+    
+    # Calculate page token based on page number
+    page_token = None
+    if page > 1:
+        # This is a simplified approach - in practice you'd need to store page tokens
+        # For now, we'll use a basic calculation
+        page_token = request.args.get('pageToken')
     
     # Find channel title from our favorites
     channel_title = "Channel"
@@ -668,6 +700,7 @@ def channel(channel_id, tab='videos'):
     videos = []
     playlists = []
     next_page_token = None
+    total_results = 0
     
     if tab == 'playlists':
         # Get channel playlists
@@ -682,27 +715,34 @@ def channel(channel_id, tab='videos'):
                 }
                 playlists.append(playlist)
     else:
-        # Get recent videos (default tab) - use fast method with pagination
+        # Get recent videos with pagination
         results = youtube.get_channel_videos_recent_fast(channel_id, page_token=page_token)
-        if results and 'items' in results:
+        if results:
             next_page_token = results.get('nextPageToken')
+            total_results = results.get('pageInfo', {}).get('totalResults', 0)
             
-            for item in results['items']:
-                if ('snippet' in item and 
-                    'id' in item and 
-                    'videoId' in item['id']):
-                    
-                    video_id = item['id']['videoId']
-                    
-                    if video_id and item['snippet']['title'] != 'Deleted video':
-                        video = {
-                            'id': video_id,
-                            'title': item['snippet']['title'],
-                            'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
-                            'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
-                            'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
-                        }
-                        videos.append(video)
+            if 'items' in results:
+                for item in results['items']:
+                    if ('snippet' in item and 
+                        'id' in item and 
+                        'videoId' in item['id']):
+                        
+                        video_id = item['id']['videoId']
+                        
+                        if video_id and item['snippet']['title'] != 'Deleted video':
+                            video = {
+                                'id': video_id,
+                                'title': item['snippet']['title'],
+                                'channel': item['snippet'].get('channelTitle', 'Unknown Channel'),
+                                'thumbnail': item['snippet']['thumbnails']['medium']['url'] if 'thumbnails' in item['snippet'] else '',
+                                'description': item['snippet']['description'][:100] + '...' if len(item['snippet']['description']) > 100 else item['snippet']['description']
+                            }
+                            videos.append(video)
+    
+    # Calculate pagination info
+    has_next = bool(next_page_token)
+    has_prev = page > 1
+    estimated_total_pages = min(10, (total_results // 20) + 1) if total_results > 0 else 1
     
     return render_template('channel.html', 
                          videos=videos, 
@@ -710,8 +750,11 @@ def channel(channel_id, tab='videos'):
                          channel_title=channel_title,
                          channel_id=channel_id,
                          current_tab=tab,
+                         current_page=page,
+                         has_next=has_next,
+                         has_prev=has_prev,
                          next_page_token=next_page_token,
-                         current_page_token=page_token)
+                         estimated_total_pages=estimated_total_pages)
 
 @app.route('/watch/<video_id>')
 def watch(video_id):

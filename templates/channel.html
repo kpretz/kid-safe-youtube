@@ -68,6 +68,40 @@
             min-height: 400px;
         }
 
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 30px;
+            padding: 20px;
+        }
+
+        .page-btn {
+            display: inline-block;
+            padding: 12px 20px;
+            background: #4A90E2;
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+        }
+
+        .page-btn:hover {
+            background: #357ABD;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+        }
+
+        .page-info {
+            color: #666;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 0 15px;
+        }
+
         .load-more-btn {
             display: inline-block;
             padding: 15px 30px;
@@ -295,13 +329,24 @@
                         {% endfor %}
                     </div>
 
-                    <!-- Load More Button -->
-                    {% if next_page_token %}
-                        <div style="text-align: center; margin-top: 30px;">
-                            <a href="/channel/{{ channel_id }}/videos?page_token={{ next_page_token }}" 
-                               class="load-more-btn">
-                                📺 Load More Videos
-                            </a>
+                    <!-- Page Navigation -->
+                    {% if has_prev or has_next %}
+                        <div class="pagination">
+                            {% if has_prev %}
+                                <a href="/channel/{{ channel_id }}/videos?page={{ current_page - 1 }}" class="page-btn">
+                                    ← Previous
+                                </a>
+                            {% endif %}
+                            
+                            <span class="page-info">
+                                Page {{ current_page }}{% if estimated_total_pages > 1 %} of ~{{ estimated_total_pages }}{% endif %}
+                            </span>
+                            
+                            {% if has_next %}
+                                <a href="/channel/{{ channel_id }}/videos?page={{ current_page + 1 }}{% if next_page_token %}&pageToken={{ next_page_token }}{% endif %}" class="page-btn">
+                                    Next →
+                                </a>
+                            {% endif %}
                         </div>
                     {% endif %}
                 {% else %}
