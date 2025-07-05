@@ -275,10 +275,16 @@ class YouTubeAPI:
         response = requests.get(url, params=params)
         if response.status_code == 200:
             data = response.json()
-            if data.get('items'):
+            if data.get('items') and len(data['items']) > 0:
                 item = data['items'][0]
-                if 'thumbnails' in item['snippet']:
-                    return item['snippet']['thumbnails']['medium']['url']
+                thumbnails = item['snippet'].get('thumbnails', {})
+                # Try different thumbnail sizes, prefer medium
+                if 'medium' in thumbnails:
+                    return thumbnails['medium']['url']
+                elif 'default' in thumbnails:
+                    return thumbnails['default']['url']
+                elif 'high' in thumbnails:
+                    return thumbnails['high']['url']
         return None
 
     def get_playlist_videos(self, playlist_id, max_results=50):
@@ -376,7 +382,7 @@ class YouTubeAPI:
         
         return {'items': all_videos[:max_results]}
 
-    def get_channel_videos_comprehensive(self, channel_id):
+    def get_channel_videos_comprehensive(self, channel_id)::
         """Get comprehensive list of channel videos, filtering out shorts"""
         all_videos = []
         next_page_token = None
@@ -480,7 +486,10 @@ def home():
     # Add thumbnails to playlists
     for playlist in favorites['playlists']:
         if 'thumbnail' not in playlist or not playlist['thumbnail']:
-            playlist['thumbnail'] = youtube.get_playlist_thumbnail(playlist['id'])
+            print(f"🔍 Fetching thumbnail for playlist: {playlist['title']}")
+            thumbnail_url = youtube.get_playlist_thumbnail(playlist['id'])
+            print(f"📸 Got thumbnail URL: {thumbnail_url}")
+            playlist['thumbnail'] = thumbnail_url
     
     return render_template('index.html', 
                          playlists=favorites['playlists'], 
