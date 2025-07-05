@@ -3,6 +3,7 @@ import requests
 import os
 import json
 import base64
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this')
@@ -18,14 +19,11 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 DO_API_TOKEN = os.environ.get('DO_API_TOKEN', '')
 DO_APP_ID = os.environ.get('DO_APP_ID', '')
 
-import json
-import base64
-
-# File to store favorites (for local development)
+# File to store favorites and watch history (for local development)
 FAVORITES_FILE = 'favorites.json'
 
 def load_favorites():
-    """Load favorites from environment variable or file"""
+    """Load favorites and watch history from environment variable or file"""
     # Try to load from environment variable first (for production)
     favorites_env = os.environ.get('FAVORITES_DATA')
     if favorites_env:
@@ -44,7 +42,8 @@ def load_favorites():
         # Default favorites if nothing exists
         return {
             'playlists': [],
-            'channels': []
+            'channels': [],
+            'watch_history': []
         }
 
 def update_digitalocean_env_var(favorites):
@@ -112,7 +111,7 @@ def update_digitalocean_env_var(favorites):
         return False
 
 def save_favorites(favorites):
-    """Save favorites to environment variable and file"""
+    """Save favorites and watch history to environment variable and file"""
     # Save to file (for local development)
     try:
         with open(FAVORITES_FILE, 'w') as f:
@@ -124,6 +123,68 @@ def save_favorites(favorites):
     update_digitalocean_env_var(favorites)
     
     return favorites
+
+def add_to_watch_history(video_id, video_title=None, channel_title=None, thumbnail=None):
+    """Add a video to watch history"""
+    favorites = load_favorites()
+    
+    # Ensure watch_history exists
+    if 'watch_history' not in favorites:
+        favorites['watch_history'] = []
+    
+    # Get video details if not provided
+    if not video_title or not channel_title or not thumbnail:
+        try:
+            url = f"{YOUTUBE_API_BASE}/videos"
+            params = {
+                'part': 'snippet',
+                'id': video_id,
+                'key': YOUTUBE_API_KEY
+            }
+            
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if data['items']:
+                    snippet = data['items'][0]['snippet']
+                    video_title = video_title or snippet.get('title', 'Unknown Title')
+                    channel_title = channel_title or snippet.get('channelTitle', 'Unknown Channel')
+                    thumbnail = thumbnail or snippet.get('thumbnails', {}).get('medium', {}).get('url', '')
+        except Exception as e:
+            print(f"Error fetching video details: {e}")
+            video_title = video_title or 'Unknown Title'
+            channel_title = channel_title or 'Unknown Channel'
+            thumbnail = thumbnail or ''
+    
+    # Remove if already exists (to avoid duplicates and update timestamp)
+    favorites['watch_history'] = [item for item in favorites['watch_history'] if item['id'] != video_id]
+    
+    # Add to beginning of list
+    watch_item = {
+        'id': video_id,
+        'title': video_title,
+        'channel': channel_title,
+        'thumbnail': thumbnail,
+        'description': '',  # We'll keep this empty for watch history
+        'watched_at': datetime.now().isoformat()
+    }
+    
+    favorites['watch_history'].insert(0, watch_item)
+    
+    # Keep only last 50 videos
+    favorites['watch_history'] = favorites['watch_history'][:50]
+    
+    # Save updated favorites
+    save_favorites(favorites)
+    print(f"✅ Added to watch history: {video_title}")
+
+def get_recent_videos():
+    """Get recently watched videos"""
+    favorites = load_favorites()
+    watch_history = favorites.get('watch_history', [])
+    
+    # Return last 12 watched videos
+    return watch_history[:12]
 
 def get_youtube_info(url):
     """Extract channel or playlist info from YouTube URL"""
@@ -268,6 +329,33 @@ class YouTubeAPI:
         params = {
             'part': 'snippet',
             'playlistId': playlist_id,
+            'maxResults': 1,
+            'key': self.api_key
+        }
+        
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('items') and len(data['items']) > 0:
+                item = data['items'][0]
+                thumbnails = item['snippet'].get('thumbnails', {})
+                # Try different thumbnail sizes, prefer medium
+                if 'medium' in thumbnails:
+                    return thumbnails['medium']['url']
+                elif 'default' in thumbnails:
+                    return thumbnails['default']['url']
+                elif 'high' in thumbnails:
+                    return thumbnails['high']['url']
+        return None
+
+    def get_channel_thumbnail(self, channel_id):
+        """Get thumbnail from first video in channel"""
+        url = f"{YOUTUBE_API_BASE}/search"
+        params = {
+            'part': 'snippet',
+            'channelId': channel_id,
+            'type': 'video',
+            'order': 'relevance',
             'maxResults': 1,
             'key': self.api_key
         }
@@ -480,7 +568,7 @@ youtube = YouTubeAPI(YOUTUBE_API_KEY)
 
 @app.route('/')
 def home():
-    """Main page with family favorites"""
+    """Main page with family favorites and recently watched videos"""
     favorites = load_favorites()
     
     # Add thumbnails to playlists
@@ -488,12 +576,25 @@ def home():
         if 'thumbnail' not in playlist or not playlist['thumbnail']:
             print(f"🔍 Fetching thumbnail for playlist: {playlist['title']}")
             thumbnail_url = youtube.get_playlist_thumbnail(playlist['id'])
-            print(f"📸 Got thumbnail URL: {thumbnail_url}")
+            print(f"📸 Got playlist thumbnail URL: {thumbnail_url}")
             playlist['thumbnail'] = thumbnail_url
+    
+    # Add video thumbnails to channels
+    for channel in favorites['channels']:
+        if 'video_thumbnail' not in channel or not channel['video_thumbnail']:
+            print(f"🔍 Fetching video thumbnail for channel: {channel['title']}")
+            thumbnail_url = youtube.get_channel_thumbnail(channel['id'])
+            print(f"📸 Got channel video thumbnail URL: {thumbnail_url}")
+            channel['video_thumbnail'] = thumbnail_url
+    
+    # Get recently watched videos
+    recent_videos = get_recent_videos()
+    print(f"📺 Found {len(recent_videos)} recently watched videos")
     
     return render_template('index.html', 
                          playlists=favorites['playlists'], 
-                         channels=favorites['channels'])
+                         channels=favorites['channels'],
+                         recent_videos=recent_videos)
 
 @app.route('/admin')
 def admin():
@@ -531,6 +632,43 @@ def admin_export():
     favorites_b64 = base64.b64encode(favorites_json.encode('utf-8')).decode('utf-8')
     
     return render_template('admin_export.html', favorites_data=favorites_b64)
+
+@app.route('/admin/history')
+def admin_history():
+    """View watch history in admin"""
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+    
+    favorites = load_favorites()
+    watch_history = favorites.get('watch_history', [])
+    
+    return render_template('admin_history.html', watch_history=watch_history)
+
+@app.route('/admin/history/clear')
+def admin_clear_history():
+    """Clear all watch history"""
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+    
+    favorites = load_favorites()
+    favorites['watch_history'] = []
+    save_favorites(favorites)
+    
+    flash('✅ Watch history cleared!', 'success')
+    return redirect(url_for('admin'))
+
+@app.route('/admin/history/remove/<video_id>')
+def admin_remove_from_history(video_id):
+    """Remove specific video from watch history"""
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+    
+    favorites = load_favorites()
+    favorites['watch_history'] = [item for item in favorites.get('watch_history', []) if item['id'] != video_id]
+    save_favorites(favorites)
+    
+    flash('✅ Video removed from history!', 'success')
+    return redirect(url_for('admin_history'))
 
 @app.route('/admin/logout')
 def admin_logout():
@@ -767,7 +905,7 @@ def channel(channel_id, tab='videos'):
 
 @app.route('/watch/<video_id>')
 def watch(video_id):
-    """Watch a video"""
+    """Watch a video and add to history"""
     # Clean the video ID - remove any extra characters
     video_id = video_id.strip()
     
@@ -775,6 +913,9 @@ def watch(video_id):
     if not video_id or len(video_id) != 11:
         flash(f'Invalid video ID: {video_id}', 'error')
         return redirect(url_for('home'))
+    
+    # Add to watch history
+    add_to_watch_history(video_id)
     
     # Log for debugging
     print(f"🎬 Playing video ID: {video_id}")
