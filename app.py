@@ -292,6 +292,26 @@ class YouTubeAPI:
             return response.json()
         return None
 
+    def get_channel_videos_recent_fast(self, channel_id, max_results=20, page_token=None):
+        """Get recent videos from a channel (optimized for speed)"""
+        url = f"{YOUTUBE_API_BASE}/search"
+        params = {
+            'part': 'snippet',
+            'channelId': channel_id,
+            'type': 'video',  # This already filters out shorts
+            'order': 'date',
+            'maxResults': max_results,
+            'key': self.api_key
+        }
+        
+        if page_token:
+            params['pageToken'] = page_token
+        
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            return response.json()
+        return None
+
     def get_channel_videos_recent(self, channel_id, max_results=50):
         """Get recent videos from a channel (most recent first, no shorts)"""
         all_videos = []
@@ -337,7 +357,7 @@ class YouTubeAPI:
         
         return {'items': all_videos[:max_results]}
 
-    def get_channel_videos_comprehensive(self, channel_id):
+    def get_channel_videos_comprehensive(self, channel_id)::
         """Get comprehensive list of channel videos, filtering out shorts"""
         all_videos = []
         next_page_token = None
@@ -419,7 +439,7 @@ class YouTubeAPI:
             'part': 'snippet',
             'channelId': channel_id,
             'type': 'video',
-            'order': 'date',  # 
+            'order': 'relevance',  # Changed from 'date' to 'relevance' to get better mix
             'videoDuration': 'medium',  # Filters out shorts (which are usually 'short')
             'maxResults': max_results,
             'key': self.api_key
@@ -636,6 +656,7 @@ def playlist(playlist_id):
 def channel(channel_id, tab='videos'):
     """View channel videos or playlists with tabs"""
     favorites = load_favorites()
+    page_token = request.args.get('page_token')
     
     # Find channel title from our favorites
     channel_title = "Channel"
@@ -646,6 +667,7 @@ def channel(channel_id, tab='videos'):
     
     videos = []
     playlists = []
+    next_page_token = None
     
     if tab == 'playlists':
         # Get channel playlists
@@ -660,9 +682,11 @@ def channel(channel_id, tab='videos'):
                 }
                 playlists.append(playlist)
     else:
-        # Get recent videos (default tab)
-        results = youtube.get_channel_videos_recent(channel_id)
+        # Get recent videos (default tab) - use fast method with pagination
+        results = youtube.get_channel_videos_recent_fast(channel_id, page_token=page_token)
         if results and 'items' in results:
+            next_page_token = results.get('nextPageToken')
+            
             for item in results['items']:
                 if ('snippet' in item and 
                     'id' in item and 
@@ -685,7 +709,9 @@ def channel(channel_id, tab='videos'):
                          playlists=playlists,
                          channel_title=channel_title,
                          channel_id=channel_id,
-                         current_tab=tab)
+                         current_tab=tab,
+                         next_page_token=next_page_token,
+                         current_page_token=page_token)
 
 @app.route('/watch/<video_id>')
 def watch(video_id):

@@ -68,6 +68,47 @@
             min-height: 400px;
         }
 
+        .load-more-btn {
+            display: inline-block;
+            padding: 15px 30px;
+            background: #4A90E2;
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+        }
+
+        .load-more-btn:hover {
+            background: #357ABD;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .loading::after {
+            content: '';
+            width: 40px;
+            height: 40px;
+            margin: 20px auto;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4A90E2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: block;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .tabs {
             display: flex;
             margin-bottom: 30px;
@@ -221,7 +262,7 @@
             <!-- Channel Tabs -->
             <div class="tabs">
                 <a href="/channel/{{ channel_id }}/videos" class="tab {% if current_tab == 'videos' %}active{% endif %}">
-                    📹 Videos
+                    📹 Recent Videos
                 </a>
                 <a href="/channel/{{ channel_id }}/playlists" class="tab {% if current_tab == 'playlists' %}active{% endif %}">
                     📋 Playlists
@@ -233,7 +274,7 @@
                 <div class="channel-header">
                     <div class="video-count">
                         {% if videos %}
-                            {{ videos|length }} recent videos (shorts filtered out)
+                            {{ videos|length }} recent videos
                         {% else %}
                             No videos found from this channel
                         {% endif %}
@@ -253,6 +294,16 @@
                         </a>
                         {% endfor %}
                     </div>
+
+                    <!-- Load More Button -->
+                    {% if next_page_token %}
+                        <div style="text-align: center; margin-top: 30px;">
+                            <a href="/channel/{{ channel_id }}/videos?page_token={{ next_page_token }}" 
+                               class="load-more-btn">
+                                📺 Load More Videos
+                            </a>
+                        </div>
+                    {% endif %}
                 {% else %}
                     <div class="empty-state">
                         No recent videos found from this channel.
