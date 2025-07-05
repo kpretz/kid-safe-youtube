@@ -216,6 +216,24 @@
             line-height: 1.4;
         }
 
+        .load-more-btn {
+            display: inline-block;
+            padding: 12px 25px;
+            background: #4A90E2;
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+        }
+
+        .load-more-btn:hover {
+            background: #357ABD;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+        }
+
         @media (max-width: 768px) {
             .search-box {
                 flex-direction: column;
@@ -249,6 +267,13 @@
                 </a>
                 {% endfor %}
             </div>
+            {% if total_recent_videos > 3 %}
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="/recent" class="load-more-btn">
+                    Show More Recent Videos ({{ total_recent_videos - 3 }} more)
+                </a>
+            </div>
+            {% endif %}
         </div>
         {% endif %}
 
