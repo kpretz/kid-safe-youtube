@@ -349,30 +349,49 @@ class YouTubeAPI:
         return None
 
     def get_channel_thumbnail(self, channel_id):
-        """Get thumbnail from first video in channel"""
+        """Get thumbnail from first regular video in channel (not shorts)"""
         url = f"{YOUTUBE_API_BASE}/search"
         params = {
             'part': 'snippet',
             'channelId': channel_id,
             'type': 'video',
             'order': 'relevance',
-            'maxResults': 1,
+            'videoDuration': 'medium',  # Filter out shorts
+            'maxResults': 5,  # Get a few videos to find a good one
             'key': self.api_key
         }
         
         response = requests.get(url, params=params)
         if response.status_code == 200:
             data = response.json()
-            if data.get('items') and len(data['items']) > 0:
-                item = data['items'][0]
-                thumbnails = item['snippet'].get('thumbnails', {})
-                # Try different thumbnail sizes, prefer medium
-                if 'medium' in thumbnails:
-                    return thumbnails['medium']['url']
-                elif 'default' in thumbnails:
-                    return thumbnails['default']['url']
-                elif 'high' in thumbnails:
-                    return thumbnails['high']['url']
+            if data.get('items'):
+                # Try to find a video that's definitely not a short
+                for item in data['items']:
+                    if 'id' in item and 'videoId' in item['id']:
+                        video_id = item['id']['videoId']
+                        
+                        # Check if it's a regular video (not short)
+                        video_details = self.get_video_details(video_id)
+                        if video_details and self.is_regular_video(video_details):
+                            thumbnails = item['snippet'].get('thumbnails', {})
+                            # Try different thumbnail sizes, prefer medium
+                            if 'medium' in thumbnails:
+                                return thumbnails['medium']['url']
+                            elif 'default' in thumbnails:
+                                return thumbnails['default']['url']
+                            elif 'high' in thumbnails:
+                                return thumbnails['high']['url']
+                
+                # Fallback: if no regular videos found, use first available
+                if data['items']:
+                    item = data['items'][0]
+                    thumbnails = item['snippet'].get('thumbnails', {})
+                    if 'medium' in thumbnails:
+                        return thumbnails['medium']['url']
+                    elif 'default' in thumbnails:
+                        return thumbnails['default']['url']
+                    elif 'high' in thumbnails:
+                        return thumbnails['high']['url']
         return None
 
     def get_playlist_videos(self, playlist_id, max_results=50):
@@ -406,13 +425,14 @@ class YouTubeAPI:
         return None
 
     def get_channel_videos_recent_fast(self, channel_id, max_results=20, page_token=None):
-        """Get recent videos from a channel (optimized for speed)"""
+        """Get recent videos from a channel (optimized for speed, filters out shorts)"""
         url = f"{YOUTUBE_API_BASE}/search"
         params = {
             'part': 'snippet',
             'channelId': channel_id,
-            'type': 'video',  # This already filters out shorts
+            'type': 'video',
             'order': 'date',
+            'videoDuration': 'medium',  # This filters out shorts (which are 'short')
             'maxResults': max_results,
             'key': self.api_key
         }
@@ -422,7 +442,25 @@ class YouTubeAPI:
         
         response = requests.get(url, params=params)
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            
+            # Additional filtering for shorts by checking duration
+            if data.get('items'):
+                filtered_items = []
+                for item in data['items']:
+                    if ('snippet' in item and 'id' in item and 'videoId' in item['id']):
+                        video_id = item['id']['videoId']
+                        
+                        # Get video details to double-check duration
+                        video_details = self.get_video_details(video_id)
+                        if video_details and self.is_regular_video(video_details):
+                            filtered_items.append(item)
+                        else:
+                            print(f"🚫 Filtered out short video: {item['snippet']['title']}")
+                
+                data['items'] = filtered_items
+            
+            return data
         return None
 
     def get_channel_videos_recent(self, channel_id, max_results=50):
@@ -533,15 +571,28 @@ class YouTubeAPI:
         
         # Parse ISO 8601 duration (PT1M30S = 1 minute 30 seconds)
         import re
-        duration_match = re.search(r'PT(?:(\d+)M)?(?:(\d+)S)?', duration)
         
-        if duration_match:
-            minutes = int(duration_match.group(1) or 0)
-            seconds = int(duration_match.group(2) or 0)
-            total_seconds = minutes * 60 + seconds
+        # Handle different duration formats
+        if duration.startswith('PT'):
+            # Extract hours, minutes, and seconds
+            hours_match = re.search(r'(\d+)H', duration)
+            minutes_match = re.search(r'(\d+)M', duration)
+            seconds_match = re.search(r'(\d+)S', duration)
             
-            # Consider videos over 60 seconds as regular videos (not shorts)
-            return total_seconds > 60
+            hours = int(hours_match.group(1)) if hours_match else 0
+            minutes = int(minutes_match.group(1)) if minutes_match else 0
+            seconds = int(seconds_match.group(1)) if seconds_match else 0
+            
+            total_seconds = hours * 3600 + minutes * 60 + seconds
+            
+            # YouTube Shorts are typically 60 seconds or less
+            # We'll be conservative and consider anything over 65 seconds as regular video
+            is_regular = total_seconds > 65
+            
+            if not is_regular:
+                print(f"🚫 Detected short video: {total_seconds} seconds")
+            
+            return is_regular
         
         return True  # Default to including if duration can't be parsed
 
